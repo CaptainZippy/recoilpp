@@ -9,7 +9,18 @@ struct Atom {
 };
 
 // State contains rendered UI from state.
-struct State;
+struct State {
+    using Setter = std::function<void(int)>;
+    std::map<const Atom*, int> _map;
+    std::tuple<int, Setter> access(const Atom& a) {
+        auto [it, inserted] = _map.emplace(&a, a._initial);
+        return {it->second, [it](int x) { it->second = x; }};
+    }
+    int read(const Atom& a) {
+        auto [it, inserted] = _map.emplace(&a, a._initial);
+        return it->second;
+    }
+};
 
 // Application specific.
 
@@ -18,7 +29,6 @@ namespace Model {
 const Atom width{"width", 100};
 const Atom height{"height", 200};
 }  // namespace Model
-
 
 // Application View contains rendered UI from state.
 namespace View {
@@ -48,7 +58,9 @@ void print(const Element& e) {
         std::vector<char> _indent;
         Visitor() { _indent.push_back(0); }
         void operator()(const Text& t) { printf("%sT text='%s'\n", _indent.data(), t.s.c_str()); }
-        void operator()(const Button& t) { printf("%sB text='%s'\n", _indent.data(), t.text.c_str()); }
+        void operator()(const Button& t) {
+            printf("%sB text='%s'\n", _indent.data(), t.text.c_str());
+        }
         void operator()(const Frame& t) { printf("%sF\n", _indent.data()); }
         void operator()(const List& l) {
             printf("%sL (%zu)\n", _indent.data(), l.e.size());
@@ -63,71 +75,46 @@ void print(const Element& e) {
     } vis;
     std::visit(vis, e);
 }
-}  // namespace Data
+}  // namespace View
 
 // Generic
+struct Renderer;
+using RenderFunc = std::function<View::Element(Renderer&, State&)>;
 
-using RenderFunc = std::function<View::Element(State&)>;
-
-struct State {
-    using Setter = std::function<void(int)>;
-    std::map<const Atom*, int> _map;
-    std::tuple<int, Setter> access(const Atom& a) {
-        auto [it, inserted] = _map.emplace(&a, a._initial);
-        return {it->second, [it](int x) { it->second = x; }};
-    }
-    int read(const Atom& a) {
-        auto [it, inserted] = _map.emplace(&a, a._initial);
-        return it->second;
-    }
-    View::Element frame(RenderFunc r) { return r(*this); }
+struct Renderer {
+    View::Element component(State& s, const char* id, RenderFunc r) { return r(*this, s); }
 };
 
 // Application
 
-View::Element renderChild(State& s) {
+View::Element renderChild(Renderer& r, State& s) {
     return View::Text{"OK"};
 }
 
-View::Element renderTop(State& s) {
+View::Element renderTop(Renderer& r, State& s) {
     auto [w, setw] = s.access(Model::width);
     auto h = s.read(Model::height);
 
     return View::List{{View::Text{std::format("Height value={}", h)},
-                       View::Text{std::format("Width value={}", w)}, s.frame(renderChild),
+                       View::Text{std::format("Width value={}", w)},
+                       r.component(s, "child", renderChild),
                        View::Button{.text = "Add..", .onClick = []() {}}}};
 }
 
-struct Root {
-    State _state;
-    RenderFunc _render;
-    std::string _id;
-    Root(const char* id, RenderFunc r) : _id(id), _render(std::move(r)) {}
-
-    std::map<Atom*, std::vector<Atom*>> _memo;
-
-    void _push(const char* id) {}
-    void _pop() {}
-
-    void iter() {
-        std::vector<int> stk;
-        //_push(_stk, _id);
-        auto s = _render(_state);
-        //_pop();
-        View::print(s);
+int main() {
+    State state;
+    Renderer renderer;
+    while (1) {
+        auto view = renderer.component(state, "root", renderTop);
+        View::print(view);
         std::string action;
         std::cin >> action;
         if (action == "+") {
-            auto [w, setw] = _state.access(Model::width);
+            auto [w, setw] = state.access(Model::width);
             setw(w + 1);
+        } else if (action == "q") {
+            break;
         }
-    }
-};
-
-int main() {
-    Root s{"root", renderTop};
-    while (1) {
-        s.iter();
     }
     return 0;
 }
