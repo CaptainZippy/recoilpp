@@ -47,8 +47,8 @@ void print(const Element& e) {
     struct Visitor {
         std::vector<char> _indent;
         Visitor() { _indent.push_back(0); }
-        void operator()(const Text& t) { printf("%sT %s\n", _indent.data(), t.s.c_str()); }
-        void operator()(const Button& t) { printf("%sB\n", _indent.data()); }
+        void operator()(const Text& t) { printf("%sT text='%s'\n", _indent.data(), t.s.c_str()); }
+        void operator()(const Button& t) { printf("%sB text='%s'\n", _indent.data(), t.text.c_str()); }
         void operator()(const Frame& t) { printf("%sF\n", _indent.data()); }
         void operator()(const List& l) {
             printf("%sL (%zu)\n", _indent.data(), l.e.size());
@@ -64,6 +64,8 @@ void print(const Element& e) {
     std::visit(vis, e);
 }
 }  // namespace Data
+
+// Generic
 
 using RenderFunc = std::function<View::Element(State&)>;
 
@@ -81,13 +83,15 @@ struct State {
     View::Element frame(RenderFunc r) { return r(*this); }
 };
 
+// Application
+
 View::Element renderChild(State& s) {
     return View::Text{"OK"};
 }
 
 View::Element renderTop(State& s) {
     auto [w, setw] = s.access(Model::width);
-    auto h = s.read(Model::width);
+    auto h = s.read(Model::height);
 
     return View::List{{View::Text{std::format("Height value={}", h)},
                        View::Text{std::format("Width value={}", w)}, s.frame(renderChild),
@@ -114,8 +118,8 @@ struct Root {
         std::string action;
         std::cin >> action;
         if (action == "+") {
-            /*auto [w, setw] = width.access();
-            setw(w + 1);*/
+            auto [w, setw] = _state.access(Model::width);
+            setw(w + 1);
         }
     }
 };
